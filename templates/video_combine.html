@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VEmbed — Video Combiner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* ─── Reset ────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ─── Design Tokens ─────────────────────────────────────────────────
+       Palette: light blue-gray with deep-navy header.
+       Everything is readable, nothing is too dark.
+    ─────────────────────────────────────────────────────────────────── */
+    :root {
+      --page-bg:    #eef2f7;
+      --card-bg:    #ffffff;
+      --card-inner: #f4f8fd;
+      --border:     #cfd9e8;
+      --border-hi:  #3b82f6;
+
+      --navy:       #1a3a5c;
+      --navy-light: #2c5282;
+      --blue:       #2563eb;
+      --blue-h:     #1d4ed8;
+      --blue-dim:   rgba(37,99,235,.08);
+
+      --text:       #1e2d3d;
+      --text-2:     #3d5570;
+      --muted:      #607d96;
+
+      --success:    #0d7a4e;
+      --success-bg: rgba(13,122,78,.09);
+      --error:      #c0392b;
+      --error-bg:   rgba(192,57,43,.09);
+      --warn:       #92600a;
+      --warn-bg:    rgba(146,96,10,.09);
+      --info:       #1d5fa0;
+      --info-bg:    rgba(29,95,160,.09);
+
+      --r:  12px;
+      --rs:  8px;
+      --t:  .18s ease;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--page-bg);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.65;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ─── Header ─────────────────────────────────────────────────────── */
+    header {
+      background: linear-gradient(135deg, var(--navy) 0%, #1f4d7a 100%);
+      color: #e8f0ff;
+      padding: 20px 40px;
+      display: flex; align-items: center; gap: 18px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.2);
+    }
+    .logo {
+      width: 50px; height: 50px; border-radius: 12px; flex-shrink: 0;
+      background: rgba(255,255,255,.14);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px; border: 1px solid rgba(255,255,255,.2);
+    }
+    header h1 { font-size: 26px; font-weight: 800; color: #fff; letter-spacing: -.3px; }
+    header p  { font-size: 14px; color: #90b5d8; margin-top: 2px; font-weight: 400; }
+
+    /* ─── Layout ─────────────────────────────────────────────────────── */
+    main {
+      max-width: 1060px;
+      margin: 0 auto;
+      padding: 26px 18px 90px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+
+    /* ─── Cards ──────────────────────────────────────────────────────── */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 28px 30px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.05);
+    }
+    .sec-title {
+      font-size: 18px; font-weight: 700; color: var(--text);
+      margin-bottom: 5px; letter-spacing: -.2px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .sec-title::before {
+      content: ''; display: block;
+      width: 4px; height: 20px; flex-shrink: 0;
+      background: linear-gradient(to bottom, var(--blue), #60a5fa);
+      border-radius: 2px;
+    }
+    .sec-desc { color: var(--muted); font-size: 14.5px; margin-bottom: 20px; font-weight: 400; }
+
+    /* ─── Info box ───────────────────────────────────────────────────── */
+    .info-box {
+      background: var(--info-bg);
+      border: 1px solid rgba(29,95,160,.18);
+      border-radius: var(--rs);
+      padding: 14px 18px;
+      font-size: 14px; color: var(--info);
+      margin-bottom: 20px; line-height: 1.8;
+    }
+    .info-box strong { color: var(--navy); font-weight: 600; }
+    code {
+      background: rgba(0,0,0,.06); padding: 2px 7px;
+      border-radius: 4px; font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+      font-size: 13px; color: var(--blue); font-weight: 500;
+    }
+
+    /* ─── Videos grid ────────────────────────────────────────────────── */
+    .videos-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 14px; }
+    @media (max-width: 660px) { .videos-grid { grid-template-columns: 1fr; } }
+
+    /* ─── Video card ─────────────────────────────────────────────────── */
+    .vid-card {
+      background: var(--card-inner);
+      border: 1px solid var(--border);
+      border-radius: var(--rs);
+      padding: 16px;
+      transition: border-color var(--t);
+    }
+    .vid-card.active { border-color: #93c5fd; }
+
+    .vid-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .vid-num { font-size: 12.5px; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: .08em; }
+
+    .tag {
+      font-size: 11px; font-weight: 700; padding: 3px 10px;
+      border-radius: 20px; text-transform: uppercase; letter-spacing: .05em;
+    }
+    .tag-req { background: var(--success-bg); color: var(--success); }
+    .tag-opt { background: var(--blue-dim);   color: var(--blue); }
+
+    /* ─── Drop zone ──────────────────────────────────────────────────── */
+    .dz {
+      position: relative;
+      border: 1.5px dashed var(--border);
+      border-radius: var(--rs);
+      padding: 14px 10px; text-align: center; cursor: pointer;
+      transition: all var(--t); margin-bottom: 14px;
+    }
+    .dz:hover, .dz.over { border-color: var(--blue); background: var(--blue-dim); }
+    .dz.filled { border-style: solid; border-color: #93c5fd; background: rgba(37,99,235,.04); }
+    .dz input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+    .dz-icon  { font-size: 26px; display: block; margin-bottom: 5px; }
+    .dz-lbl   { color: var(--muted); font-size: 14px; font-weight: 500; }
+    .dz-fmts  { font-size: 12px; color: #aabbcc; margin-top: 3px; }
+    .dz-fname { font-size: 13px; color: var(--blue); margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+
+    /* ─── Section blocks ─────────────────────────────────────────────── */
+    .sec-block { margin-top: 8px; }
+    .sec-hdr   { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+    .sec-lbl   { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+
+    .time-row { display: grid; grid-template-columns: 1fr 24px 1fr; gap: 6px; align-items: center; }
+    .time-row .arr { text-align: center; color: var(--muted); font-size: 15px; }
+    .time-field label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 5px; font-weight: 500; }
+
+    .opt-sec { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+    .opt-sec.show { display: block; }
+
+    .add-btn {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      width: 100%; margin-top: 10px; padding: 9px 12px;
+      background: none; border: 1.5px dashed var(--border);
+      color: var(--muted); border-radius: var(--rs);
+      cursor: pointer; font-size: 13.5px; font-weight: 500; transition: all var(--t);
+    }
+    .add-btn:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-dim); }
+
+    /* ─── Inputs ─────────────────────────────────────────────────────── */
+    input[type="text"],
+    input[type="number"],
+    select {
+      background: #fff; border: 1px solid var(--border);
+      border-radius: var(--rs); color: var(--text);
+      padding: 11px 14px; font-size: 15px; width: 100%;
+      font-family: 'Inter', sans-serif; font-weight: 400;
+      outline: none;
+      transition: border-color var(--t), box-shadow var(--t);
+    }
+    input:focus, select:focus {
+      border-color: var(--border-hi);
+      box-shadow: 0 0 0 3px rgba(59,130,246,.14);
+    }
+    input::placeholder { color: var(--muted); opacity: .7; }
+    select {
+      appearance: none; cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 11 11'%3E%3Cpath fill='%23607d96' d='M5.5 8L.5 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px;
+    }
+    option { background: #fff; }
+    input[type="color"] {
+      padding: 3px; height: 40px; cursor: pointer;
+      border: 1px solid var(--border); border-radius: var(--rs); background: #fff;
+    }
+
+    /* ─── Toggle switch ──────────────────────────────────────────────── */
+    .toggle-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 0; cursor: pointer; user-select: none;
+    }
+    .toggle { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; inset: 0; border-radius: 20px;
+      background: var(--border); cursor: pointer; transition: background var(--t);
+    }
+    .slider::before {
+      content: ''; position: absolute;
+      width: 16px; height: 16px; border-radius: 50%;
+      left: 3px; top: 3px; background: #fff;
+      box-shadow: 0 1px 3px rgba(0,0,0,.2);
+      transition: transform var(--t);
+    }
+    .toggle input:checked + .slider { background: var(--blue); }
+    .toggle input:checked + .slider::before { transform: translateX(18px); }
+    .toggle-lbl  { font-size: 16px; font-weight: 600; color: var(--text); }
+    .toggle-hint { font-size: 13.5px; color: var(--muted); }
+
+    /* ─── Form layout rows ───────────────────────────────────────────── */
+    .row { display: flex; gap: 14px; align-items: flex-start; }
+    .field { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+    .field > label { font-size: 14px; font-weight: 600; color: var(--text-2); }
+    .hint { font-size: 13px; color: var(--muted); margin-top: 3px; line-height: 1.55; }
+    @media (max-width: 600px) { .row { flex-direction: column; } }
+
+    .suffix-wrap { display: flex; }
+    .suffix-wrap input { border-radius: var(--rs) 0 0 var(--rs); }
+    .suffix-tag {
+      background: var(--card-inner); border: 1px solid var(--border); border-left: none;
+      border-radius: 0 var(--rs) var(--rs) 0;
+      padding: 11px 14px; color: var(--muted); font-size: 15px;
+      display: flex; align-items: center; white-space: nowrap;
+    }
+
+    /* ─── Folder picker ──────────────────────────────────────────────── */
+    .folder-wrap { display: flex; gap: 0; }
+    .folder-wrap input { border-radius: var(--rs) 0 0 var(--rs); }
+    .browse-btn {
+      flex-shrink: 0; padding: 11px 18px;
+      background: var(--navy); color: #e8f0ff;
+      border: none; border-radius: 0 var(--rs) var(--rs) 0;
+      cursor: pointer; font-size: 14px; font-weight: 600;
+      font-family: 'Inter', sans-serif;
+      transition: background var(--t); white-space: nowrap;
+    }
+    .browse-btn:hover { background: var(--navy-light); }
+
+    /* ─── Watermark preview ──────────────────────────────────────────── */
+    .wm-preview {
+      background: #111827;
+      border: 1px solid var(--border); border-radius: var(--rs);
+      height: 100px; overflow: hidden; margin-top: 16px;
+      display: flex; align-items: center; justify-content: space-evenly;
+      flex-wrap: wrap; gap: 6px; padding: 8px;
+    }
+    .wm-preview span { font-weight: 700; white-space: nowrap; transition: all .2s ease; display: inline-block; }
+    .wm-note { font-size: 13px; color: var(--muted); text-align: center; margin-top: 7px; }
+
+    /* ─── Transition diagram ─────────────────────────────────────────── */
+    .fade-diagram {
+      display: flex; align-items: center; gap: 6px;
+      margin-top: 12px; flex-wrap: wrap;
+    }
+    .fd-chip {
+      display: flex; align-items: center; gap: 6px; padding: 5px 12px;
+      background: var(--card-inner); border: 1px solid var(--border);
+      border-radius: 20px; font-size: 13.5px; color: var(--text-2);
+    }
+    .fd-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ─── Tooltip ────────────────────────────────────────────────────── */
+    .tip {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 15px; height: 15px; border-radius: 50%;
+      background: var(--border); color: var(--muted);
+      font-size: 10.5px; cursor: default; position: relative; flex-shrink: 0; vertical-align: middle;
+    }
+    .tip::after {
+      content: attr(data-tip);
+      display: none; position: absolute;
+      bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+      white-space: nowrap; pointer-events: none;
+      background: var(--navy); color: #dde8ff;
+      padding: 6px 12px; border-radius: 6px; font-size: 13px; z-index: 20;
+      box-shadow: 0 2px 10px rgba(0,0,0,.2);
+    }
+    .tip:hover::after { display: block; }
+
+    /* ─── Generate button ────────────────────────────────────────────── */
+    .gen-wrap { display: flex; justify-content: center; padding: 8px 0; }
+    .gen-btn {
+      background: linear-gradient(135deg, var(--blue) 0%, #1e40af 100%);
+      color: #fff; border: none; padding: 16px 68px;
+      border-radius: 50px; font-size: 17px; font-weight: 700;
+      font-family: 'Inter', sans-serif; letter-spacing: .01em;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(37,99,235,.28);
+      transition: all var(--t);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .gen-btn:hover  { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(37,99,235,.36); }
+    .gen-btn:active { transform: translateY(0); }
+    .gen-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+    /* ─── Progress card ──────────────────────────────────────────────── */
+    .prog-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .prog-bar {
+      background: var(--card-inner); border-radius: 100px;
+      height: 5px; margin-bottom: 14px; overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .prog-fill {
+      height: 100%; border-radius: 100px; width: 5%;
+      background: linear-gradient(90deg, var(--blue), #60a5fa);
+      transition: width .7s ease;
+    }
+    .prog-fill.indeterminate {
+      width: 30%;
+      animation: sweep 1.5s ease-in-out infinite alternate;
+    }
+    @keyframes sweep { from { margin-left: 0 } to { margin-left: 70% } }
+
+    /* ─── Console ────────────────────────────────────────────────────── */
+    .log-box {
+      background: #0d1117; border: 1px solid #1e2d3d;
+      border-radius: var(--rs); padding: 16px 18px;
+      height: 240px; overflow-y: auto;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
+      font-size: 13.5px; line-height: 1.9;
+    }
+    .log-box::-webkit-scrollbar { width: 5px; }
+    .log-box::-webkit-scrollbar-thumb { background: #2d3d50; border-radius: 10px; }
+    .ll     { display: block; color: #7a9ab5; }
+    .ll.ok  { color: #4ade80; }
+    .ll.err { color: #f87171; }
+    .ll.hi  { color: #60a5fa; }
+    .ll.hd  { color: #e2e8f0; font-weight: 600; }
+
+    .s-pill { font-size: 13px; font-weight: 700; padding: 5px 16px; border-radius: 20px; }
+    .s-proc { background: var(--warn-bg);    color: var(--warn);    }
+    .s-done { background: var(--success-bg); color: var(--success); }
+    .s-err  { background: var(--error-bg);   color: var(--error);   }
+
+    .dl-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: linear-gradient(135deg, #059669, #047857);
+      color: #fff; padding: 14px 36px;
+      border-radius: 50px; font-weight: 700; font-size: 15.5px;
+      font-family: 'Inter', sans-serif;
+      text-decoration: none; margin-top: 20px;
+      transition: opacity var(--t); box-shadow: 0 3px 14px rgba(5,150,105,.2);
+    }
+    .dl-btn:hover { opacity: .88; }
+
+    /* ─── Alert ──────────────────────────────────────────────────────── */
+    .alert { padding: 13px 17px; border-radius: var(--rs); font-size: 14px; margin-bottom: 16px; font-weight: 500; }
+    .a-err { background: var(--error-bg); border: 1px solid rgba(192,57,43,.25); color: var(--error); }
+
+    /* ─── Divider ────────────────────────────────────────────────────── */
+    .divider { border-top: 1px solid var(--border); margin: 18px 0; }
+
+    /* ─── Details/advanced ───────────────────────────────────────────── */
+    details > summary {
+      cursor: pointer; color: var(--muted); font-size: 14.5px; font-weight: 500;
+      user-select: none; list-style: none; display: flex; align-items: center; gap: 7px;
+    }
+    details > summary::before { content: '▸'; font-size: 10px; transition: transform var(--t); }
+    details[open] > summary::before { content: '▾'; }
+    details > summary:hover { color: var(--blue); }
+
+    /* ─── Folder browser modal ───────────────────────────────────────── */
+    .modal-bg {
+      display: none; position: fixed; inset: 0; z-index: 100;
+      background: rgba(10,20,40,.5); backdrop-filter: blur(4px);
+      align-items: center; justify-content: center;
+    }
+    .modal-bg.open { display: flex; }
+    .modal-box {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: var(--r); width: 500px; max-width: 95vw;
+      box-shadow: 0 10px 50px rgba(0,0,0,.18);
+      display: flex; flex-direction: column; max-height: 80vh;
+    }
+    .modal-head {
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal-head h3 { font-size: 17px; font-weight: 700; color: var(--text); }
+    .modal-close {
+      background: none; border: none; font-size: 18px; cursor: pointer;
+      color: var(--muted); padding: 2px 6px; border-radius: 4px; line-height: 1;
+    }
+    .modal-close:hover { background: var(--card-inner); color: var(--text); }
+
+    .modal-nav {
+      padding: 10px 16px; background: var(--card-inner);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px; min-height: 44px;
+    }
+    .nav-up {
+      background: var(--navy); color: #e8f0ff; border: none;
+      border-radius: 6px; padding: 5px 12px; font-size: 12px;
+      cursor: pointer; flex-shrink: 0; transition: background var(--t);
+    }
+    .nav-up:disabled { opacity: .35; cursor: default; }
+    .nav-up:not(:disabled):hover { background: var(--navy-light); }
+    .nav-path { font-size: 14px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .modal-list { overflow-y: auto; padding: 8px 10px; flex: 1; }
+    .fm-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 11px 12px; border-radius: 6px; cursor: pointer;
+      font-size: 14.5px; font-family: 'Inter', sans-serif; color: var(--text-2);
+      transition: background var(--t); border: none; background: none; width: 100%; text-align: left;
+    }
+    .fm-item:hover { background: var(--blue-dim); color: var(--blue); }
+    .fm-empty { padding: 24px; text-align: center; color: var(--muted); font-size: 14px; }
+
+    .modal-foot {
+      padding: 14px 18px; border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    }
+    .modal-cur { font-size: 13px; color: var(--blue); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+    .btn-sel {
+      background: var(--blue); color: #fff; border: none;
+      border-radius: var(--rs); padding: 10px 22px;
+      font-size: 14px; font-weight: 700; font-family: 'Inter', sans-serif;
+      cursor: pointer; flex-shrink: 0; transition: background var(--t);
+    }
+    .btn-sel:hover { background: var(--blue-h); }
+    .btn-cancel {
+      background: var(--card-inner); border: 1px solid var(--border);
+      color: var(--text-2); border-radius: var(--rs); padding: 10px 16px;
+      font-size: 14px; font-family: 'Inter', sans-serif; cursor: pointer; flex-shrink: 0;
+    }
+    .btn-cancel:hover { background: var(--border); }
+  </style>
+</head>
+<body>
+
+<!-- ══ HEADER ════════════════════════════════════════════════════════════ -->
+<header>
+  <div class="logo">🎬</div>
+  <div>
+    <h1>VEmbed Video Combiner</h1>
+    <p>Upload · Trim · Combine · Watermark — powered by Python + MoviePy</p>
+  </div>
+</header>
+
+<main>
+  <div id="alert-area"></div>
+
+  <form id="mf" enctype="multipart/form-data">
+
+    <!-- ══ VIDEOS ════════════════════════════════════════════════════ -->
+    <div class="card">
+      <div class="sec-title">Videos</div>
+      <p class="sec-desc">Upload 1–4 video files. Define one or more clip sections per file. Only Video 1 is required.</p>
+
+      <div class="info-box">
+        <strong>Time format</strong> — <code>MM:SS</code>&nbsp; e.g. <code>01:30</code> = 1 min 30 sec
+        &nbsp;|&nbsp; <code>H:MM:SS</code>&nbsp; e.g. <code>1:02:30</code> = 1 hr 2 min 30 sec.
+        Leave <em>Start</em> blank to begin from the very start; leave <em>End</em> blank to go to the natural end.
+        &nbsp;·&nbsp; <strong>Multiple sections</strong> — click "+ Add Section" to extract several separate segments from the same file.
+      </div>
+
+      <div class="videos-grid" id="videos-grid"></div>
+    </div>
+
+    <!-- ══ TRANSITION ════════════════════════════════════════════════ -->
+    <div class="card">
+      <div class="sec-title">Transition</div>
+      <p class="sec-desc">A smooth fade-to-black is applied at every join between clips.</p>
+
+      <div class="row">
+        <div class="field" style="max-width:320px">
+          <label for="fade_duration">Fade Duration
+            <span class="tip" data-tip="0 = hard cut · applied at every clip boundary">?</span>
+          </label>
+          <select id="fade_duration" name="fade_duration">
+            <option value="0">0.0 s — Hard cut (no transition)</option>
+            <option value="0.1">0.1 s — Flash (very quick)</option>
+            <option value="0.3" selected>0.3 s — Smooth  ✦ recommended</option>
+            <option value="0.5">0.5 s — Gentle</option>
+            <option value="0.75">0.75 s — Slow</option>
+            <option value="1.0">1.0 s — Very slow</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="fade-diagram">
+        <div class="fd-chip">
+          <div class="fd-dot" style="background:linear-gradient(135deg,#3b82f6,#1e3a5f)"></div>
+          Clip ends → fades to black
+        </div>
+        <span style="color:var(--muted);font-size:16px">→</span>
+        <div class="fd-chip">
+          <div class="fd-dot" style="background:#111827"></div>
+          Black frame
+        </div>
+        <span style="color:var(--muted);font-size:16px">→</span>
+        <div class="fd-chip">
+          <div class="fd-dot" style="background:linear-gradient(135deg,#1e3a5f,#3b82f6)"></div>
+          Next clip fades in
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ WATERMARK ═════════════════════════════════════════════════ -->
+    <div class="card">
+      <div class="sec-title">Watermark</div>
+
+      <label class="toggle-row" for="wm_enabled">
+        <div class="toggle">
+          <input type="checkbox" id="wm_enabled" name="wm_enabled" checked>
+          <span class="slider"></span>
+        </div>
+        <span class="toggle-lbl">Enable watermark</span>
+        <span class="toggle-hint">— semi-transparent text tiled across every frame</span>
+      </label>
+
+      <div id="wm-opts" style="margin-top:18px">
+        <div class="row">
+          <div class="field" style="flex:2">
+            <label for="watermark_text">Text</label>
+            <input type="text" id="watermark_text" name="watermark_text"
+                   value="VEmbed" placeholder="Your watermark text" maxlength="40">
+          </div>
+          <div class="field" style="flex:0.85">
+            <label for="watermark_size">Size (px)
+              <span class="tip" data-tip="Typical range: 24–72 px">?</span>
+            </label>
+            <input type="number" id="watermark_size" name="watermark_size" value="36" min="10" max="200" step="2">
+          </div>
+          <div class="field" style="flex:0.65">
+            <label for="watermark_color">Colour</label>
+            <input type="color" id="watermark_color" name="watermark_color" value="#b4b4b4">
+          </div>
+          <div class="field" style="flex:0.85">
+            <label for="watermark_opacity">Opacity (%)
+              <span class="tip" data-tip="5 = barely visible · 33 = subtle grey · 100 = solid">?</span>
+            </label>
+            <input type="number" id="watermark_opacity" name="watermark_opacity" value="33" min="5" max="100">
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:12px">
+          <div class="field" style="max-width:340px">
+            <label for="watermark_orientation">Orientation
+              <span class="tip" data-tip="Direction the text is drawn across each frame">?</span>
+            </label>
+            <select id="watermark_orientation" name="watermark_orientation">
+              <option value="horizontal">Horizontal →  (left to right, normal reading)</option>
+              <option value="vertical">Vertical ↑  (reads bottom to top)</option>
+              <option value="deg90">90° Clockwise ↓  (reads top to bottom)</option>
+              <option value="deg270">270° / Upside-down  (flipped horizontal)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="wm-preview" id="wm-prev">
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <p class="wm-note">Live preview on dark background (simulates watermark over video content)</p>
+      </div>
+    </div>
+
+    <!-- ══ OUTPUT ════════════════════════════════════════════════════ -->
+    <div class="card">
+      <div class="sec-title">Output Settings</div>
+      <p class="sec-desc">Filename, save location, and encoding options.</p>
+
+      <div class="row">
+        <div class="field" style="flex:2">
+          <label for="output_filename">Output Filename</label>
+          <div class="suffix-wrap">
+            <input type="text" id="output_filename" name="output_filename"
+                   value="video_output_watermark" placeholder="combined_output">
+            <span class="suffix-tag">.mp4</span>
+          </div>
+        </div>
+        <div class="field" style="flex:1">
+          <label for="fps">Frame Rate
+            <span class="tip" data-tip="25 = PAL standard · 30 = NTSC · Match source uses the first clip's native FPS">?</span>
+          </label>
+          <select id="fps" name="fps">
+            <option value="25" selected>25 FPS — Standard (PAL)</option>
+            <option value="30">30 FPS — Standard (NTSC)</option>
+            <option value="60">60 FPS — High frame rate</option>
+            <option value="">Match source clip</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field" style="margin-top:14px">
+        <label for="output_dir">Output Folder
+          <span style="color:var(--muted);font-weight:400"> — optional</span>
+        </label>
+        <div class="folder-wrap">
+          <input type="text" id="output_dir" name="output_dir"
+                 placeholder="Leave blank to use the default output/ folder">
+          <button type="button" class="browse-btn" onclick="openBrowser()">📂 Browse</button>
+        </div>
+        <span class="hint">Leave blank to save in the server's <code>output/</code> folder.
+          Use the Download button below after processing to save the file to your machine.</span>
+      </div>
+
+      <div class="divider"></div>
+
+      <details>
+        <summary>Advanced encoding options</summary>
+        <div class="row" style="margin-top:14px">
+          <div class="field">
+            <label for="video_codec">Video Codec</label>
+            <select id="video_codec" name="video_codec">
+              <option value="libx264" selected>H.264 — libx264  ✦ recommended</option>
+              <option value="libx265">H.265 — libx265 (smaller file, slower)</option>
+              <option value="mpeg4">MPEG-4</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="audio_codec">Audio Codec</label>
+            <select id="audio_codec" name="audio_codec">
+              <option value="aac" selected>AAC — widely compatible</option>
+              <option value="mp3">MP3</option>
+              <option value="copy">Copy (no re-encode)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="crf">Quality (CRF)
+              <span class="tip" data-tip="H.264: 0=lossless, 23=default, 51=lowest quality. Lower = better quality, larger file.">?</span>
+            </label>
+            <input type="number" id="crf" name="crf" value="23" min="0" max="51">
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <!-- ══ GENERATE ══════════════════════════════════════════════════ -->
+    <div class="gen-wrap">
+      <button type="submit" class="gen-btn" id="gen-btn">
+        <span>🎬</span> Generate Video
+      </button>
+    </div>
+
+  </form>
+
+  <!-- ══ PROGRESS / CONSOLE ════════════════════════════════════════ -->
+  <div class="card" id="prog-card" style="display:none">
+    <div class="prog-hdr">
+      <div class="sec-title" style="margin-bottom:0">Processing Log</div>
+      <span class="s-pill s-proc" id="s-pill">Processing…</span>
+    </div>
+    <div class="prog-bar">
+      <div class="prog-fill indeterminate" id="prog-fill"></div>
+    </div>
+    <div class="log-box" id="log-box"></div>
+    <div id="dl-area" style="display:none; text-align:center">
+      <a class="dl-btn" id="dl-link" href="#">⬇ &nbsp;Download Output Video</a>
+    </div>
+  </div>
+
+</main>
+
+<!-- ══ FOLDER BROWSER MODAL ══════════════════════════════════════════════ -->
+<div class="modal-bg" id="folder-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>Select Output Folder</h3>
+      <button class="modal-close" onclick="closeBrowser()">✕</button>
+    </div>
+    <div class="modal-nav">
+      <button class="nav-up" id="nav-up" onclick="browseUp()" disabled>↑ Up</button>
+      <span class="nav-path" id="nav-path">Loading…</span>
+    </div>
+    <div class="modal-list" id="fm-list"></div>
+    <div class="modal-foot">
+      <span class="modal-cur" id="modal-cur">—</span>
+      <button class="btn-cancel" onclick="closeBrowser()">Cancel</button>
+      <button class="btn-sel" onclick="confirmFolder()">✓ Select</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ JAVASCRIPT ════════════════════════════════════ -->
+<script>
+// ── Video card factory ────────────────────────────────────────────────
+
+function buildGrid() {
+  const g = document.getElementById('videos-grid');
+  for (let i = 1; i <= 4; i++) g.appendChild(makeCard(i));
+}
+
+function makeCard(n) {
+  const v = `v${n}`, req = n === 1;
+  const el = document.createElement('div');
+  el.className = 'vid-card'; el.id = `card-${v}`;
+  el.innerHTML = `
+    <div class="vid-hdr">
+      <span class="vid-num">Video ${n}</span>
+      <span class="tag ${req?'tag-req':'tag-opt'}">${req?'Required':'Optional'}</span>
+    </div>
+    <div class="dz" id="dz-${v}">
+      <input type="file" name="video_${v}" id="fi-${v}" accept="video/*">
+      <span class="dz-icon">📂</span>
+      <span class="dz-lbl">Click or drag a video file here</span>
+      <span class="dz-fmts">MP4 · MOV · AVI · MKV · WebM</span>
+      <div class="dz-fname" id="fn-${v}">No file selected</div>
+    </div>
+    <div class="sec-block">
+      <div class="sec-hdr">
+        <span class="sec-lbl">Section 1</span>
+        <span class="tag tag-req" style="font-size:9px">Required if uploading</span>
+      </div>
+      <div class="time-row">
+        <div class="time-field"><label>Start</label>
+          <input type="text" name="video_${v}_s1_start" placeholder="00:00" autocomplete="off"></div>
+        <span class="arr">→</span>
+        <div class="time-field"><label>End</label>
+          <input type="text" name="video_${v}_s1_end"   placeholder="01:30" autocomplete="off"></div>
+      </div>
+    </div>
+    <div class="opt-sec" id="os-${v}-2">
+      <div class="sec-hdr">
+        <span class="sec-lbl">Section 2</span>
+        <span class="tag tag-opt" style="font-size:9px">Optional</span>
+      </div>
+      <div class="time-row">
+        <div class="time-field"><label>Start</label>
+          <input type="text" name="video_${v}_s2_start" placeholder="02:00" autocomplete="off"></div>
+        <span class="arr">→</span>
+        <div class="time-field"><label>End</label>
+          <input type="text" name="video_${v}_s2_end"   placeholder="03:15" autocomplete="off"></div>
+      </div>
+    </div>
+    <div class="opt-sec" id="os-${v}-3">
+      <div class="sec-hdr">
+        <span class="sec-lbl">Section 3</span>
+        <span class="tag tag-opt" style="font-size:9px">Optional</span>
+      </div>
+      <div class="time-row">
+        <div class="time-field"><label>Start</label>
+          <input type="text" name="video_${v}_s3_start" placeholder="05:00" autocomplete="off"></div>
+        <span class="arr">→</span>
+        <div class="time-field"><label>End</label>
+          <input type="text" name="video_${v}_s3_end"   placeholder="06:00" autocomplete="off"></div>
+      </div>
+    </div>
+    <button type="button" class="add-btn" id="ab-${v}-2" onclick="reveal('${v}',2)">+ Add Section 2</button>
+    <button type="button" class="add-btn" id="ab-${v}-3" onclick="reveal('${v}',3)" style="display:none">+ Add Section 3</button>
+  `;
+
+  el.querySelector(`#fi-${v}`).addEventListener('change', function() {
+    const name = this.files[0]?.name;
+    document.getElementById(`fn-${v}`).textContent = name || 'No file selected';
+    document.getElementById(`dz-${v}`).classList.toggle('filled', !!name);
+    document.getElementById(`card-${v}`).classList.toggle('active', !!name);
+  });
+
+  const dz = el.querySelector(`#dz-${v}`);
+  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('over'); });
+  dz.addEventListener('dragleave', ()  => dz.classList.remove('over'));
+  dz.addEventListener('drop',      e  => { e.preventDefault(); dz.classList.remove('over'); });
+  return el;
+}
+
+function reveal(v, n) {
+  document.getElementById(`os-${v}-${n}`).classList.add('show');
+  document.getElementById(`ab-${v}-${n}`).style.display = 'none';
+  const nx = document.getElementById(`ab-${v}-${n+1}`);
+  if (nx) nx.style.display = 'flex';
+}
+
+// ── Watermark toggle ──────────────────────────────────────────────────
+
+document.getElementById('wm_enabled').addEventListener('change', function() {
+  document.getElementById('wm-opts').style.display = this.checked ? '' : 'none';
+});
+
+// ── Watermark live preview ────────────────────────────────────────────
+
+const ROT = { horizontal: 0, vertical: -90, deg90: 90, deg270: 180 };
+
+function syncPreview() {
+  const text  = document.getElementById('watermark_text').value || '—';
+  const px    = Math.max(11, Math.min(+document.getElementById('watermark_size').value || 36, 44));
+  const color = document.getElementById('watermark_color').value;
+  const op    = (+document.getElementById('watermark_opacity').value || 33) / 100;
+  const rot   = ROT[document.getElementById('watermark_orientation').value] || 0;
+
+  document.querySelectorAll('#wm-prev span').forEach(s => {
+    s.textContent     = text;
+    s.style.color     = color;
+    s.style.fontSize  = px + 'px';
+    s.style.opacity   = op;
+    s.style.transform = `rotate(${rot}deg)`;
+  });
+}
+
+['watermark_text','watermark_size','watermark_color','watermark_opacity','watermark_orientation']
+  .forEach(id => document.getElementById(id).addEventListener('input', syncPreview));
+
+// ── Validation ────────────────────────────────────────────────────────
+
+const T_RE = /^$|^\d{1,2}:\d{2}(:\d{2})?$/;
+
+function validate() {
+  let has = false;
+  for (let i = 1; i <= 4; i++) {
+    const f = document.getElementById(`fi-v${i}`);
+    if (f && f.files.length) { has = true; break; }
+  }
+  if (!has) return 'Please upload at least one video file.';
+  for (const inp of document.querySelectorAll('input[name*="_s"][name*="_start"],input[name*="_s"][name*="_end"]')) {
+    if (!T_RE.test(inp.value.trim()))
+      return `Invalid time format: "${inp.value}" — use MM:SS (e.g. 01:30) or H:MM:SS (e.g. 1:02:30)`;
+  }
+  return null;
+}
+
+// ── Form submit ───────────────────────────────────────────────────────
+
+let _seen = 0;
+
+document.getElementById('mf').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const ae = document.getElementById('alert-area');
+  ae.innerHTML = '';
+
+  const err = validate();
+  if (err) {
+    ae.innerHTML = `<div class="alert a-err">${err}</div>`;
+    ae.scrollIntoView({ behavior: 'smooth' }); return;
+  }
+
+  const btn = document.getElementById('gen-btn');
+  btn.disabled = true; btn.innerHTML = '<span>⏳</span> Processing…';
+
+  const pc = document.getElementById('prog-card');
+  pc.style.display = 'block';
+  document.getElementById('log-box').innerHTML = '';
+  document.getElementById('dl-area').style.display = 'none';
+
+  const pill = document.getElementById('s-pill');
+  pill.textContent = 'Processing…'; pill.className = 's-pill s-proc';
+  const pf = document.getElementById('prog-fill');
+  pf.className = 'prog-fill indeterminate'; pf.style.background = '';
+  _seen = 0;
+
+  pc.scrollIntoView({ behavior: 'smooth' });
+
+  try {
+    const res = await fetch('/generate', { method: 'POST', body: new FormData(this) });
+    const j   = await res.json();
+    if (j.error) { setErr(j.error, btn); return; }
+    poll(j.job_id, btn);
+  } catch(ex) { setErr('Network error: ' + ex.message, btn); }
+});
+
+function resetBtn(btn) { btn.disabled = false; btn.innerHTML = '<span>🎬</span> Generate Video'; }
+function setErr(msg, btn) {
+  document.getElementById('alert-area').innerHTML = `<div class="alert a-err">${msg}</div>`;
+  document.getElementById('alert-area').scrollIntoView({ behavior: 'smooth' });
+  resetBtn(btn);
+}
+
+// ── Status polling ────────────────────────────────────────────────────
+
+async function poll(id, btn) {
+  try {
+    const d = await (await fetch(`/status/${id}`)).json();
+    addLog(d.log || []);
+    if (d.status === 'done')        { done(d.output, btn); }
+    else if (d.status === 'error')  { failed(btn); }
+    else  { setTimeout(() => poll(id, btn), 1400); }
+  } catch { setTimeout(() => poll(id, btn), 2000); }
+}
+
+function addLog(lines) {
+  const b = document.getElementById('log-box');
+  for (let i = _seen; i < lines.length; i++) {
+    const t = lines[i];
+    const s = document.createElement('span');
+    s.className = 'll';
+    if (t.startsWith('ERROR') || t.startsWith('✗'))  s.classList.add('err');
+    else if (t.startsWith('✓'))                       s.classList.add('ok');
+    else if (t.startsWith('['))                       s.classList.add('hi');
+    else if (!t)                                      s.classList.add('hd');
+    s.textContent = t || ' ';
+    b.appendChild(s); b.appendChild(document.createElement('br'));
+  }
+  _seen = lines.length;
+  b.scrollTop = b.scrollHeight;
+}
+
+function done(out, btn) {
+  const pf = document.getElementById('prog-fill');
+  pf.className = 'prog-fill'; pf.style.width = '100%';
+  const pill = document.getElementById('s-pill');
+  pill.textContent = '✓ Complete'; pill.className = 's-pill s-done';
+  resetBtn(btn);
+  if (out) {
+    const da = document.getElementById('dl-area');
+    da.style.display = 'block';
+    document.getElementById('dl-link').href = `/download/${encodeURIComponent(out)}`;
+    da.scrollIntoView({ behavior: 'smooth' });
+  }
+}
+
+function failed(btn) {
+  const pf = document.getElementById('prog-fill');
+  pf.className = 'prog-fill'; pf.style.width = '100%'; pf.style.background = '#ef4444';
+  const pill = document.getElementById('s-pill');
+  pill.textContent = '✗ Error'; pill.className = 's-pill s-err';
+  resetBtn(btn);
+}
+
+// ── Folder browser modal ──────────────────────────────────────────────
+
+let _curPath = '', _curParent = null;
+
+async function openBrowser() {
+  document.getElementById('folder-modal').classList.add('open');
+  await browse('');
+}
+function closeBrowser() { document.getElementById('folder-modal').classList.remove('open'); }
+function browseUp() { if (_curParent) browse(_curParent); }
+
+async function browse(path) {
+  try {
+    const d = await (await fetch(`/browse?path=${encodeURIComponent(path)}`)).json();
+    if (d.error) { document.getElementById('fm-list').innerHTML = `<div class="fm-empty">${d.error}</div>`; return; }
+    _curPath   = d.current;
+    _curParent = d.parent;
+    document.getElementById('nav-path').textContent  = d.label || '…';
+    document.getElementById('modal-cur').textContent = d.current;
+    document.getElementById('nav-up').disabled = !d.parent;
+    const list = document.getElementById('fm-list');
+    list.innerHTML = '';
+    if (!d.entries.length) {
+      list.innerHTML = '<div class="fm-empty">No sub-folders in this location.</div>';
+    } else {
+      d.entries.forEach(name => {
+        const btn = document.createElement('button');
+        btn.className = 'fm-item'; btn.type = 'button';
+        btn.innerHTML = `📁 ${name}`;
+        btn.onclick = () => browse(_curPath + '/' + name);
+        list.appendChild(btn);
+      });
+    }
+  } catch { document.getElementById('fm-list').innerHTML = '<div class="fm-empty">Could not load directory.</div>'; }
+}
+
+function confirmFolder() {
+  document.getElementById('output_dir').value = _curPath;
+  closeBrowser();
+}
+
+document.getElementById('folder-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeBrowser();
+});
+
+// ── Init ──────────────────────────────────────────────────────────────
+buildGrid();
+syncPreview();
+</script>
+</body>
+</html>

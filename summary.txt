@@ -1,0 +1,65 @@
+== combine_video.py — Setup & Execution Summary ==
+Generated: 2026-06-07
+
+DIRECTORIES CREATED
+-------------------
+mkdir -p /home/vembed/coding_works/video_gen/input
+mkdir -p /home/vembed/coding_works/video_gen/output
+mkdir -p /home/vembed/coding_works/video_gen/frames
+
+VIRTUAL ENVIRONMENT
+-------------------
+python3 -m venv /home/vembed/coding_works/video_gen/venv
+
+DEPENDENCIES INSTALLED
+----------------------
+(inside the venv)
+venv/bin/pip install opencv-python-headless moviepy
+
+Packages installed (pinned in requirements.txt):
+  decorator==5.3.1
+  imageio==2.37.3
+  imageio-ffmpeg==0.6.0
+  moviepy==2.2.1
+  numpy==2.4.6
+  opencv-python-headless==4.13.0.92
+  pillow==11.3.0
+  proglog==0.1.12
+  python-dotenv==1.2.2
+  tqdm==4.68.1
+
+requirements.txt saved to: /home/vembed/coding_works/video_gen/requirements.txt
+
+SCRIPT WRITTEN
+--------------
+/home/vembed/coding_works/video_gen/combine_video.py
+
+HOW TO RUN
+----------
+1. Drop your input videos into:
+     video_gen/input/
+
+2. Edit the USER CONFIG block at the top of combine_video.py:
+   - V1_FILE, V2_FILE  — filenames of your input videos
+   - V1_START, V1_END  — trim range for video 1 (format: "MM:SS" or None)
+   - V2_START, V2_END  — trim range for video 2
+   - OUTPUT_FILE       — desired output filename
+   - TARGET_FPS        — 25 (or set to None to use the source clip's FPS)
+
+3. Activate the venv and run:
+     source venv/bin/activate
+     python combine_video.py
+
+OUTPUT
+------
+- Combined video → video_gen/output/combined_output.mp4  (H.264 / AAC)
+- Extracted frames:
+    video_gen/frames/v1/frame_000000.jpg … (all frames from video 1)
+    video_gen/frames/v2/frame_000000.jpg … (all frames from video 2)
+
+NOTES
+-----
+- Codec detection uses OpenCV (cv2.CAP_PROP_FOURCC) and is printed at runtime.
+- Output is always re-encoded as libx264 + aac for maximum compatibility.
+- To add a third video: define V3_FILE / V3_START / V3_END in the USER CONFIG
+  section and uncomment the V3 entry in the video_configs list in main().
