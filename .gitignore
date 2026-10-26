@@ -34,3 +34,6 @@ Thumbs.db
 *.avi
 *.mov
 output/
+
+# Generated frame dumps (recreated on every run)
+frames/

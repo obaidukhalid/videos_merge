@@ -153,6 +153,11 @@ def _process_job(job_id: str, config: dict) -> None:
 
         clips = []
         fade  = config.get("fade_duration", 0.5)
+        # All clips are resized to one common resolution so concatenation
+        # doesn't pad differently-sized clips with black borders. Honors an
+        # optional (width, height) "resolution" config; defaults to the first
+        # clip's native size.
+        target_size = config.get("resolution")
 
         for i, (fl, path, start, end) in enumerate(flat):
             fname = os.path.basename(path)
@@ -166,6 +171,12 @@ def _process_job(job_id: str, config: dict) -> None:
                 info(f"  Trimmed: {start or '00:00'} → {end or 'end'}  ({clip.duration:.2f}s)")
             else:
                 info(f"  Full clip ({clip.duration:.2f}s)")
+
+            if target_size is None:
+                target_size = (clip.w, clip.h)
+            if (clip.w, clip.h) != tuple(target_size):
+                info(f"  Resizing {clip.w}x{clip.h} → {target_size[0]}x{target_size[1]}")
+                clip = clip.resized(tuple(target_size))
 
             # Extract frames
             fdir = os.path.join(FRAMES_DIR, fl)

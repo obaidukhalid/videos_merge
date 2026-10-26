@@ -45,6 +45,11 @@ OUTPUT_FILE = "video_output_commercial.mp4"
 # FPS is then used for the whole output).
 TARGET_FPS = 25          # or None
 
+# Target output resolution as (width, height). All clips are resized to this
+# so they share one canvas with no black padding/borders. Set to None to use
+# the first clip's native resolution as the target.
+TARGET_RESOLUTION = None  # e.g. (1920, 1080) or None
+
 # Fade-to-black duration in seconds between clips. Set to 0 to disable.
 FADE_DURATION = 0.3
 
@@ -96,7 +101,7 @@ def _extract_frames(clip: VideoFileClip, frames_subdir: str) -> None:
     print(f"  Saved {i + 1} frames → {frames_subdir}")
 
 
-def load_clip(label: str, filename: str, start: str | None, end: str | None) -> VideoFileClip:
+def load_clip(label: str, filename: str, start: str | None, end: str | None) -> VideoFileClip | None:
     path = os.path.join(INPUT_DIR, filename)
     if not os.path.isfile(path):
         sys.exit(f"[ERROR] Input file not found: {path}")
@@ -109,7 +114,18 @@ def load_clip(label: str, filename: str, start: str | None, end: str | None) -> 
     t_end   = _parse_time(end)
 
     if t_start is not None or t_end is not None:
-        clip = clip.subclipped(t_start or 0, t_end)
+        # Clamp the requested section to the file's actual duration so that an
+        # out-of-range start/end in the config doesn't crash the whole run.
+        dur = clip.duration
+        s = t_start or 0
+        if s >= dur:
+            print(f"  [SKIP] start {start or '0:00'} is past clip end ({dur:.2f}s) — skipping section")
+            clip.close()
+            return None
+        e = min(t_end, dur) if t_end is not None else dur
+        if t_end is not None and t_end > dur:
+            print(f"  [WARN] end {end} exceeds clip duration ({dur:.2f}s) — clamping to end")
+        clip = clip.subclipped(s, e)
         trim_info = f"{start or '0:00'} → {end or 'end'}"
         print(f"  Trimmed to {trim_info}  ({clip.duration:.2f}s)")
     else:
@@ -172,8 +188,19 @@ def main():
             flat_clips.append((frames_label, filename, start, end))
 
     clips = []
-    for i, (frames_label, filename, start, end) in enumerate(flat_clips):
+    target_size = TARGET_RESOLUTION  # (w, h) or None → set from first clip
+    for frames_label, filename, start, end in flat_clips:
         clip = load_clip(frames_label, filename, start, end)
+        if clip is None:        # section was out of range — skip it
+            continue
+
+        # Resize every clip to a single common resolution so concatenation
+        # doesn't pad smaller/different-shaped clips with black borders.
+        if target_size is None:
+            target_size = (clip.w, clip.h)
+        if (clip.w, clip.h) != tuple(target_size):
+            print(f"  Resizing {clip.w}x{clip.h} → {target_size[0]}x{target_size[1]}")
+            clip = clip.resized(tuple(target_size))
 
         frames_subdir = os.path.join(FRAMES_DIR, frames_label)
         # Clear any previous frames for this slot
@@ -182,18 +209,22 @@ def main():
         print(f"  Extracting frames …")
         _extract_frames(clip, frames_subdir)
 
-        if FADE_DURATION > 0:
-            is_first = (i == 0)
-            is_last  = (i == len(flat_clips) - 1)
+        clips.append(clip)
+
+    if not clips:
+        sys.exit("[ERROR] No valid clips to combine — check your section times.")
+
+    # Apply fades at clip boundaries (computed after skips so the first clip
+    # never fades in and the last never fades out).
+    if FADE_DURATION > 0:
+        for idx, clip in enumerate(clips):
             effects = []
-            if not is_first:
+            if idx != 0:
                 effects.append(FadeIn(FADE_DURATION))
-            if not is_last:
+            if idx != len(clips) - 1:
                 effects.append(FadeOut(FADE_DURATION))
             if effects:
-                clip = clip.with_effects(effects)
-
-        clips.append(clip)
+                clips[idx] = clip.with_effects(effects)
 
     # Determine FPS
     fps = TARGET_FPS if TARGET_FPS else clips[0].fps
