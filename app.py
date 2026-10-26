@@ -167,7 +167,18 @@ def _process_job(job_id: str, config: dict) -> None:
             t_end   = _parse_time(end)
 
             if t_start is not None or t_end is not None:
-                clip = clip.subclipped(t_start or 0, t_end)
+                # Clamp the requested section to the file's actual duration so an
+                # out-of-range start/end in the config doesn't crash the whole job.
+                dur = clip.duration
+                s = t_start or 0
+                if s >= dur:
+                    info(f"  [SKIP] start {start or '00:00'} is past clip end ({dur:.2f}s) — skipping section")
+                    clip.close()
+                    continue
+                e = min(t_end, dur) if t_end is not None else dur
+                if t_end is not None and t_end > dur:
+                    info(f"  [WARN] end {end} exceeds clip duration ({dur:.2f}s) — clamping to end")
+                clip = clip.subclipped(s, e)
                 info(f"  Trimmed: {start or '00:00'} → {end or 'end'}  ({clip.duration:.2f}s)")
             else:
                 info(f"  Full clip ({clip.duration:.2f}s)")
@@ -193,14 +204,22 @@ def _process_job(job_id: str, config: dict) -> None:
                 count = fi + 1
             info(f"  ✓ {count} frames extracted → frames/{fl}/")
 
-            if fade > 0:
-                effects = []
-                if i > 0:               effects.append(FadeIn(fade))
-                if i < len(flat) - 1:  effects.append(FadeOut(fade))
-                if effects:
-                    clip = clip.with_effects(effects)
-
             clips.append(clip)
+
+        if not clips:
+            job["status"] = "error"
+            info("ERROR: No valid clips to combine — check your section times.")
+            return
+
+        # Fades are applied after the loop so the first and last *kept* clips
+        # are the ones without a fade-in / fade-out.
+        if fade > 0:
+            for idx, clip in enumerate(clips):
+                effects = []
+                if idx > 0:                 effects.append(FadeIn(fade))
+                if idx < len(clips) - 1:    effects.append(FadeOut(fade))
+                if effects:
+                    clips[idx] = clip.with_effects(effects)
 
         fps = config.get("fps") or clips[0].fps
         info(f"\nConcatenating {len(clips)} clip(s) at {fps} FPS …")
